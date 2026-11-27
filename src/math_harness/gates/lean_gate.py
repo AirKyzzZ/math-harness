@@ -1,10 +1,12 @@
 import json
+import os
 import shutil
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal
 
+from math_harness.lean.cache import cache_env, fill_cache, mathlib_imports
 from math_harness.lean.elan import with_elan_on_path
 from math_harness.lean.toolchain import LEAN_TOOLCHAIN
 from math_harness.lean.workspace import ensure_template, fresh_check_dir, mh_home
@@ -139,12 +141,15 @@ def run_lean_gate(
     runner = with_elan_on_path(runner)
     home = home or mh_home()
     template = ensure_template(home, runner)
-    check_dir = fresh_check_dir(template, challenge, solution, theorem_names, home / "runs")
     args = ["lake", "comparator", "--json"]
+    env = None
     if origin == "own" and not platform.has_bwrap:
         args.append(NO_SANDBOX_FLAG)
+        if fill_cache(template, mathlib_imports(challenge, solution), home, runner):
+            env = {**os.environ, **cache_env(home)}
+    check_dir = fresh_check_dir(template, challenge, solution, theorem_names, home / "runs")
     try:
-        verdict = verdict_from_result(runner(args, check_dir, timeout_s))
+        verdict = verdict_from_result(runner(args, check_dir, timeout_s, env))
     finally:
         if not keep_check_dir:
             shutil.rmtree(check_dir, ignore_errors=True)

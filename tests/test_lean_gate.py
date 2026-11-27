@@ -277,3 +277,59 @@ def test_bad_theorem_names_are_rejected_before_any_work(names, tmp_path, challen
     with pytest.raises(ValueError):
         run_lean_gate(c, s, names, "own", home=home, platform=BWRAP, runner=recording_runner)
     assert recording_runner.calls == [] and not home.exists()
+
+
+def _mathlib_pair(tmp_path):
+    c = tmp_path / "MC.lean"
+    s = tmp_path / "MS.lean"
+    c.write_text("import Mathlib.Data.Nat.Nth\n\ntheorem t : True := by sorry\n")
+    s.write_text("import Mathlib.Data.Nat.Nth\nimport Mathlib.Algebra.IsPrimePow\n\ntheorem t : True := trivial\n")
+    return c, s
+
+
+def test_own_unsandboxed_fills_cache_then_runs_comparator_with_it(fake_template, recording_runner, tmp_path):
+    c, s = _mathlib_pair(tmp_path)
+    run_lean_gate(c, s, ["t"], "own", home=fake_template.home, platform=NO_BWRAP, runner=recording_runner)
+    fill, comparator = recording_runner.calls[-2], recording_runner.calls[-1]
+    assert fill == ["lake", "build", "Mathlib.Algebra.IsPrimePow", "Mathlib.Data.Nat.Nth"]
+    assert recording_runner.cwds[-2] == fake_template.template
+    assert comparator[:2] == ["lake", "comparator"]
+    env = recording_runner.envs[-1]
+    assert env["LAKE_ARTIFACT_CACHE"] == "true" and env["LAKE_RESTORE_ARTIFACTS"] == "true"
+    assert env["LAKE_CACHE_DIR"] == str(fake_template.home / "lake-cache")
+    assert recording_runner.envs[-2]["LAKE_CACHE_DIR"] == env["LAKE_CACHE_DIR"]
+
+
+def test_sandboxed_runs_never_use_the_cache(fake_template, tmp_path, monkeypatch):
+    monkeypatch.delenv("LAKE_ARTIFACT_CACHE", raising=False)
+    c, s = _mathlib_pair(tmp_path)
+    runner = RecordingRunner(json.dumps({**ACC, "sandboxed": True}))
+    run_lean_gate(c, s, ["t"], "own", home=fake_template.home, platform=BWRAP, runner=runner)
+    assert all(call[:2] != ["lake", "build"] for call in runner.calls)
+    assert "LAKE_ARTIFACT_CACHE" not in runner.envs[-1]
+
+
+class FailingFillRunner(RecordingRunner):
+    def __call__(self, args, cwd, timeout_s=None, env=None):
+        result = super().__call__(args, cwd, timeout_s, env)
+        if list(args)[:2] == ["lake", "build"]:
+            return CommandResult(list(args), 1, "", "build failed", 1.0, False)
+        return result
+
+
+def test_failed_fill_falls_back_to_an_uncached_comparator_run(fake_template, tmp_path, monkeypatch):
+    monkeypatch.delenv("LAKE_ARTIFACT_CACHE", raising=False)
+    c, s = _mathlib_pair(tmp_path)
+    runner = FailingFillRunner((DATA / "comparator_accepted.json").read_text())
+    v = run_lean_gate(c, s, ["t"], "own", home=fake_template.home, platform=NO_BWRAP, runner=runner)
+    assert runner.calls[-1][:2] == ["lake", "comparator"]
+    assert "LAKE_ARTIFACT_CACHE" not in runner.envs[-1]
+    assert v.accepted
+
+
+def test_no_mathlib_imports_means_no_fill_and_no_cache(fake_template, challenge_solution, recording_runner, monkeypatch):
+    monkeypatch.delenv("LAKE_ARTIFACT_CACHE", raising=False)
+    c, s = challenge_solution
+    run_lean_gate(c, s, ["t"], "own", home=fake_template.home, platform=NO_BWRAP, runner=recording_runner)
+    assert len(recording_runner.calls) == 1
+    assert "LAKE_ARTIFACT_CACHE" not in recording_runner.envs[-1]
