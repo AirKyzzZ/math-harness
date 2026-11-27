@@ -20,10 +20,13 @@ def signals(stmt: Statement, record: dict | None) -> dict:
     record = record or {}
     ep_status = (record.get("informal_status") or {}).get("state")
     forum = record.get("forum")
+    disagreement = stmt.category == "research open" and ep_status in KNOWN_RESULT
     if stmt.formal_proof:
         track = "formalized"
-    elif stmt.category == "research solved" or ep_status in KNOWN_RESULT:
+    elif disagreement:
         track = "formalize"
+    elif stmt.category == "research solved":
+        track = "solved"
     else:
         track = "open"
     return {
@@ -37,6 +40,7 @@ def signals(stmt: Statement, record: dict | None) -> dict:
         "falsifiable": ep_status in CHECKABLE,
         "question": stmt.question,
         "formal_proof": stmt.formal_proof,
+        "status_disagreement": disagreement,
         "track": track,
     }
 

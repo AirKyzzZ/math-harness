@@ -5,10 +5,10 @@ DECL = re.compile(
     r"^(?:(?:private|protected|noncomputable|unsafe|partial)\s+)*"
     r"(theorem|lemma|def|abbrev|instance|structure|inductive|class|example|opaque|axiom)\b\s*([^\s:(]*)"
 )
-DROPPED_LINE = re.compile(r"^(module\s*$|public import |import |@\[expose\] public section)")
+DROPPED_LINE = re.compile(r"^(module\s*$|public import |meta import |import |@\[expose\] public section)")
 METADATA_ATTR = re.compile(r"^(category\b|AMS\b|question\b|formal_proof\b|optimization_constant\b)")
-SORRY_BODY = re.compile(r":=\s*(by\s*)?sorry\s*$")
 OPEN_CATEGORIES = ("research open", "research solved")
+OPENERS, CLOSERS = "([{⦃⟨", ")]}⦄⟩"
 
 
 @dataclass(frozen=True)
@@ -37,64 +37,135 @@ class Chunk:
 
     @property
     def is_sorry(self) -> bool:
-        return self.kind in ("theorem", "lemma", "def", "abbrev") and bool(SORRY_BODY.search(self.text))
+        if self.kind not in ("theorem", "lemma", "def", "abbrev"):
+            return False
+        return _split_body(self.text) is not None and bool(re.search(r"\bsorry\s*$", _drop_line_comments(self.text)))
+
+
+def _scan(text: str):
+    i, depth, n = 0, 0, len(text)
+    while i < n:
+        ch = text[i]
+        if text.startswith("--", i):
+            end = text.find("\n", i)
+            i = n if end == -1 else end
+            continue
+        if ch == '"':
+            end = i + 1
+            while end < n and text[end] != '"':
+                end += 2 if text[end] == "\\" else 1
+            i = end + 1
+            continue
+        if ch in OPENERS:
+            depth += 1
+        elif ch in CLOSERS:
+            depth -= 1
+        yield i, ch, depth
+        i += 1
+
+
+def _drop_line_comments(text: str) -> str:
+    return re.sub(r"--[^\n]*", "", text)
+
+
+def _split_body(text: str) -> tuple[str, str] | None:
+    candidates = [i for i, ch, depth in _scan(text) if ch == ":" and depth == 0 and text[i + 1 : i + 2] == "="]
+    for i in candidates:
+        if re.match(r"\s*(by\b|sorry\b)", _drop_line_comments(text[i + 2 :])):
+            return text[:i], text[i + 2 :]
+    return (text[: candidates[-1]], text[candidates[-1] + 2 :]) if candidates else None
 
 
 def _split_attrs(raw: str) -> list[str]:
-    items, depth, current = [], 0, ""
+    items, current, depth, in_string = [], "", 0, False
     for ch in raw:
-        if ch == "," and depth == 0:
+        if ch == '"':
+            in_string = not in_string
+        elif not in_string and ch in OPENERS:
+            depth += 1
+        elif not in_string and ch in CLOSERS:
+            depth -= 1
+        elif ch == "," and depth == 0 and not in_string:
             items.append(current.strip())
             current = ""
             continue
-        depth += ch in "([{\""
-        depth -= ch in ")]}"
         current += ch
     if current.strip():
         items.append(current.strip())
     return items
 
 
-def _strip_comments(lines: list[str]) -> list[str]:
-    out, depth = [], 0
-    for line in lines:
-        if depth == 0 and not line.lstrip().startswith("/-"):
-            out.append(line)
-            continue
-        depth += line.count("/-")
-        depth -= line.count("-/")
-        depth = max(depth, 0)
-    return out
+def _attr_end(text: str) -> int | None:
+    depth, in_string = 0, False
+    for i, ch in enumerate(text):
+        if ch == '"':
+            in_string = not in_string
+        elif not in_string and ch == "[":
+            depth += 1
+        elif not in_string and ch == "]":
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
+
+
+def _strip_block_comments(source: str) -> str:
+    out, depth, i, n = [], 0, 0, len(source)
+    while i < n:
+        if source.startswith("/-", i):
+            depth += 1
+            i += 2
+        elif depth and source.startswith("-/", i):
+            depth -= 1
+            i += 2
+        elif depth:
+            if source[i] == "\n":
+                out.append("\n")
+            i += 1
+        elif source.startswith("--", i):
+            end = source.find("\n", i)
+            end = n if end == -1 else end
+            out.append(source[i:end])
+            i = end
+        else:
+            out.append(source[i])
+            i += 1
+    return "".join(out)
 
 
 def _chunks(source: str) -> list[Chunk]:
-    lines = [line for line in _strip_comments(source.splitlines()) if not DROPPED_LINE.match(line)]
+    raw = [line.rstrip() for line in _strip_block_comments(source).splitlines()]
+    lines = [line for line in raw if not DROPPED_LINE.match(line.lstrip())]
     chunks: list[Chunk] = []
     pending = Chunk()
     current: Chunk | None = None
     attr_buffer = ""
-    for line in lines:
+    queue = list(reversed(lines))
+    while queue:
+        line = queue.pop()
         if attr_buffer:
-            attr_buffer += " " + line.strip()
-            if attr_buffer.count("[") <= attr_buffer.count("]"):
-                pending.attrs.extend(_split_attrs(attr_buffer[2:-1]))
-                attr_buffer = ""
-            continue
-        if not line.strip():
+            line = attr_buffer + " " + line.strip()
+            attr_buffer = ""
+        elif not line.strip():
             if current is not None:
                 current.lines.append(line)
             continue
-        if line[0].isspace() and current is not None:
+        elif line[0].isspace() and current is not None:
             current.lines.append(line)
             continue
+        line = line.lstrip()
         current = None
         if line.startswith("@["):
-            attr_buffer = line.strip()
-            if attr_buffer.count("[") <= attr_buffer.count("]"):
-                pending.attrs.extend(_split_attrs(attr_buffer[2:-1]))
-                attr_buffer = ""
+            end = _attr_end(line)
+            if end is None:
+                attr_buffer = line
+                continue
+            pending.attrs.extend(_split_attrs(line[2:end]))
+            rest = line[end + 1 :].strip()
+            if rest:
+                queue.append(rest)
             continue
-        if re.match(r"^(set_option|open)\b.*\bin\s*$", line):
+        if re.match(r"^(set_option|open|omit|include)\b.*\bin\s*$", line):
             pending.prefix.append(line)
             continue
         match = DECL.match(line)
@@ -114,27 +185,28 @@ def _render(chunk: Chunk) -> str:
     return "\n".join([*prefix, *attr_line, chunk.text])
 
 
-def _signature(chunk: Chunk) -> tuple[str, str]:
-    header = SORRY_BODY.sub("", chunk.text)
-    after_name = header.split(chunk.name, 1)[1]
-    depth = 0
-    for i, ch in enumerate(after_name):
-        if ch in "([{⦃":
-            depth += 1
-        elif ch in ")]}⦄":
-            depth -= 1
-        elif ch == ":" and depth == 0 and after_name[i + 1 : i + 2] != "=":
-            return " ".join(after_name[:i].split()), " ".join(after_name[i + 1 :].split())
-    raise ValueError(f"no type found for {chunk.name}")
+def _header(chunk: Chunk) -> str:
+    split = _split_body(chunk.text)
+    if split is None:
+        raise ValueError(f"no `:=` in {chunk.name}")
+    return split[0].split(chunk.name, 1)[1].rstrip()
+
+
+def _binders_and_type(header: str, name: str) -> tuple[str, str]:
+    for i, ch, depth in _scan(header):
+        if ch == ":" and depth == 0:
+            return header[:i].strip(), header[i + 1 :].rstrip()
+    raise ValueError(f"no type found for {name}")
 
 
 def negate_signature(binders: str, typ: str) -> str:
-    return f"¬ (∀ {binders}, {typ})" if binders else f"¬ ({typ})"
+    body = typ.lstrip("\n")
+    return f"¬ (∀ {binders},\n{body}\n    )" if binders else f"¬ (\n{body}\n    )"
 
 
-def _target_text(chunk: Chunk, name: str, signature: str) -> str:
+def _target_text(chunk: Chunk, name: str, header: str) -> str:
     prefix = [p for p in chunk.prefix if not p.startswith("set_option linter")]
-    return "\n".join([*prefix, f"theorem {name}{signature} := by\n  sorry"])
+    return "\n".join([*prefix, f"theorem {name}{header} := by\n  sorry"])
 
 
 def _assemble(chunks: list[Chunk], target: Chunk, target_text: str) -> str:
@@ -147,10 +219,8 @@ def _assemble(chunks: list[Chunk], target: Chunk, target_text: str) -> str:
     return "import Mathlib\n\n" + "\n\n".join(body).strip() + "\n"
 
 
-def _is_target(chunk: Chunk, problem: str) -> str | None:
+def _category(chunk: Chunk) -> str | None:
     if chunk.kind not in ("theorem", "lemma") or not chunk.is_sorry:
-        return None
-    if not re.match(rf"^erdos_{problem}($|\.)", chunk.name):
         return None
     categories = [a.removeprefix("category").strip() for a in chunk.attrs if a.startswith("category")]
     if not categories or categories[0] not in OPEN_CATEGORIES:
@@ -164,24 +234,25 @@ def extract_statements(source: str, problem: str) -> list[Statement]:
     chunks = _chunks(source)
     statements = []
     for chunk in chunks:
-        category = _is_target(chunk, problem)
+        category = _category(chunk)
         if category is None:
             continue
-        binders, typ = _signature(chunk)
-        question = any(a == "question" for a in chunk.attrs)
-        signature = f" {binders} :\n    {typ}" if binders else f" :\n    {typ}"
-        challenge = _assemble(chunks, chunk, _target_text(chunk, chunk.name, signature))
+        header = _header(chunk)
+        binders, typ = _binders_and_type(header, chunk.name)
+        question = "question" in chunk.attrs
+        challenge = _assemble(chunks, chunk, _target_text(chunk, chunk.name, header))
         challenge_neg = None
         if question:
-            neg = f" :\n    {negate_signature(binders, typ)}"
-            challenge_neg = _assemble(chunks, chunk, _target_text(chunk, f"{chunk.name}_neg", neg))
+            neg_header = f" :\n    {negate_signature(binders, typ)}"
+            challenge_neg = _assemble(chunks, chunk, _target_text(chunk, f"{chunk.name}_neg", neg_header))
+        display = " ".join(_drop_line_comments(f"{binders} : {typ}").split())
         statements.append(
             Statement(
                 chunk.name,
                 problem,
                 category,
                 question,
-                f"{binders} : {typ}".strip(),
+                display,
                 challenge,
                 challenge_neg,
                 any(a.startswith("formal_proof") for a in chunk.attrs),

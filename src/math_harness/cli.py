@@ -140,11 +140,12 @@ def check(
 class Track(str, Enum):
     open = "open"
     formalize = "formalize"
+    solved = "solved"
 
 
 @app.command(name="list", help="Browse the Erdős catalogue, best-ranked first.")
 def list_problems(
-    track: Track | None = typer.Option(None, "--track", help="open problems or known results to formalize."),
+    track: Track | None = typer.Option(None, "--track", help="open problems, open in fc but known to be settled (formalize), or solved variants."),
     compiles: bool = typer.Option(False, "--compiles", help="Only statements validated on the pinned toolchain."),
     limit: int = typer.Option(20, "--limit", min=1, help="How many entries to show."),
 ) -> None:
@@ -165,7 +166,12 @@ def list_problems(
         sig = e["signals"]
         ok = {True: "[green]yes[/green]", False: "[red]no[/red]"}.get(e.get("compiles"), "[dim]?[/dim]")
         table.add_row(
-            Text(sanitize(e["id"])), sig["track"], f"{e['score']:.2f}", str(sig.get("forum_posts") or 0), str(sig.get("ep_status") or "-"), ok
+            Text(sanitize(e["id"])),
+            Text(sanitize(str(sig["track"]))),
+            f"{e['score']:.2f}",
+            str(sig.get("forum_posts") or 0),
+            Text(sanitize(str(sig.get("ep_status") or "-"))),
+            ok,
         )
     console.print(table)
     console.print(

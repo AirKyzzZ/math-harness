@@ -37,16 +37,26 @@ def main() -> None:
 
     def run(entry: dict) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            file = Path(tmp) / "Challenge.lean"
-            file.write_text(entry["challenge"], encoding="utf-8")
-            entry["compiles"], entry["error"] = compile_one(args.workspace.resolve(), file, args.timeout)
+            results = []
+            for key in ("challenge", "challenge_neg"):
+                if entry.get(key):
+                    file = Path(tmp) / f"{key}.lean"
+                    file.write_text(entry[key], encoding="utf-8")
+                    results.append(compile_one(args.workspace.resolve(), file, args.timeout))
+            failed = [error for ok, error in results if not ok]
+            entry["compiles"], entry["error"] = not failed, (failed[0] if failed else None)
         print(f"{'ok ' if entry['compiles'] else 'ERR'} {entry['id']}", flush=True)
+
+    def save() -> None:
+        tmp = args.catalogue.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+        os.replace(tmp, args.catalogue)
 
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
         for done, _ in enumerate(pool.map(run, todo), 1):
             if done % 10 == 0:
-                args.catalogue.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-    args.catalogue.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+                save()
+    save()
 
 
 if __name__ == "__main__":

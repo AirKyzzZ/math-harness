@@ -20,10 +20,6 @@ def test_genuinely_open_is_the_open_track():
     assert sig["track"] == "open" and sig["falsifiable"] and sig["forum_posts"] == 3
 
 
-def test_fc_solved_variant_is_the_formalize_track():
-    assert signals(stmt(category="research solved"), record(status="open"))["track"] == "formalize"
-
-
 def test_missing_record_gives_null_signals_without_crashing():
     sig = signals(stmt(), None)
     assert sig["ep_status"] is None and sig["forum_posts"] is None and sig["track"] == "open"
@@ -41,3 +37,12 @@ def test_statement_with_a_linked_formal_proof_is_not_an_opportunity():
     s = Statement("erdos_1.x", "1", "research solved", False, "1 = 1", "", None, formal_proof=True)
     sig = signals(s, record(status="proved"))
     assert sig["track"] == "formalized" and sig["formal_proof"]
+
+
+def test_fc_solved_variant_without_formal_proof_is_its_own_track():
+    sig = signals(stmt(category="research solved"), record(status="open"))
+    assert sig["track"] == "solved" and not sig["status_disagreement"]
+
+
+def test_status_disagreement_is_exposed():
+    assert signals(stmt(), record(status="proved"))["status_disagreement"] is True
