@@ -10,7 +10,7 @@ export FORCE_COLOR=1 LAKE_ARTIFACT_CACHE=true LAKE_RESTORE_ARTIFACTS=true
 shot() {
   local name=$1 cols=$2
   shift 2
-  COLUMNS="$cols" "$@" 2>&1 | perl -pe 'BEGIN{$h=$ENV{HOME};$p=" " x (length($h)-1)} s/\Q$h\E(\S*)/~$1$p/g' > "$TMP/$name.ansi" || true
+  COLUMNS="$cols" "$@" 2>&1 | perl -pe 'BEGIN{$h=$ENV{HOME};$p=" " x (length($h)-1)} s/\Q$h\E(\S*)/~$1$p/g' > "$TMP/$name.ansi"
   uv run --quiet --with pillow python scripts/render-ansi.py "$TMP/$name.ansi" "$OUT/$name.png" >/dev/null
   echo "  $OUT/$name.png"
 }

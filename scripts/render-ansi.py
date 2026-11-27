@@ -1,13 +1,18 @@
-
+import os
 import re
 import sys
 
 from PIL import Image, ImageDraw, ImageFont
 
 FONTS = [
+    *([os.environ["MH_SCREENSHOT_FONT"]] if os.environ.get("MH_SCREENSHOT_FONT") else []),
     "/System/Library/Fonts/Menlo.ttc",
     "/System/Library/Fonts/Monaco.ttf",
     "/System/Library/Fonts/SFNSMono.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "/usr/share/fonts/TTF/DejaVuSansMono.ttf",
+    "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf",
+    "C:/Windows/Fonts/consola.ttf",
 ]
 SYMBOL_FONTS = [
     "/System/Library/Fonts/Apple Symbols.ttf",
