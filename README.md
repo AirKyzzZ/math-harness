@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/banner-dark.svg">
+  <img alt="math-harness: Checked, not claimed." src="docs/brand/banner.svg">
+</picture>
+
 # math-harness
 
 Verify AI-generated Lean proofs. It wraps `lake comparator` so you get a clear accepted or rejected answer for a proof against a fixed challenge statement. The command is `math-harness`, and `mh` is a short alias.
