@@ -17,3 +17,15 @@ def test_both_console_scripts_are_declared():
     scripts = pyproject["project"]["scripts"]
     assert scripts["mh"] == "math_harness.cli:app"
     assert scripts["math-harness"] == "math_harness.cli:app"
+
+
+def test_bare_mh_prints_wordmark_and_commands():
+    result = CliRunner().invoke(app, [])
+    assert result.exit_code == 0
+    assert "math-harness" in result.stdout
+    assert "check" in result.stdout and "doctor" in result.stdout
+
+
+def test_subcommands_print_no_banner():
+    result = CliRunner().invoke(app, ["check", "--help"])
+    assert "Checked, not claimed." not in result.stdout
