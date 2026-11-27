@@ -16,8 +16,9 @@ from math_harness.lean.workspace import TemplateSetupError, mh_home
 from math_harness.platform import detect_platform
 from math_harness.receipt import write_receipt
 from math_harness.terminal import sanitize, truncate
+from math_harness.ui.banner import render_banner
 
-app = typer.Typer(no_args_is_help=True)
+app = typer.Typer(invoke_without_command=True)
 
 
 def _show_version(value: bool) -> None:
@@ -28,11 +29,16 @@ def _show_version(value: bool) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: bool = typer.Option(
         False, "--version", callback=_show_version, is_eager=True, help="Show version and exit."
     ),
 ) -> None:
-    pass
+    if ctx.invoked_subcommand is not None:
+        return
+    render_banner(Console(), __version__)
+    typer.echo(ctx.get_help())
+    raise typer.Exit()
 
 
 def _status(check: DoctorCheck) -> str:
@@ -50,7 +56,7 @@ def _print_checks(checks: list[DoctorCheck]) -> None:
     Console(width=120).print(table)
 
 
-@app.command()
+@app.command(help="Check that Lean and the verification workspace are ready.")
 def doctor(
     fix: bool = typer.Option(False, "--fix", help="Install missing elan and prepare the verification workspace."),
 ) -> None:
@@ -97,7 +103,7 @@ def _fail(message: str) -> None:
     raise typer.Exit(2)
 
 
-@app.command()
+@app.command(help="Verify a Lean solution against a frozen challenge.")
 def check(
     challenge: Path = typer.Option(..., exists=True, dir_okay=False, help="Challenge .lean file."),
     solution: Path = typer.Option(..., exists=True, dir_okay=False, help="Solution .lean file."),
