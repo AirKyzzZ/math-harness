@@ -1,6 +1,5 @@
 import argparse
 import json
-import shutil
 import subprocess
 from datetime import date
 from pathlib import Path
@@ -18,20 +17,13 @@ def revision(repo: Path) -> str:
 
 def build(fc: Path, ep: Path, out: Path) -> dict:
     records = {str(p["number"]): p for p in yaml.safe_load((ep / "data" / "problems.yaml").read_text())}
-    challenges = out / "challenges"
-    shutil.rmtree(challenges, ignore_errors=True)
-    challenges.mkdir(parents=True)
+    out.mkdir(parents=True, exist_ok=True)
     entries = []
     for path in sorted((fc / "FormalConjectures" / "ErdosProblems").glob("*.lean"), key=lambda p: (len(p.stem), p.stem)):
         if not path.stem.isdigit():
             continue
         for stmt in extract_statements(path.read_text(encoding="utf-8"), path.stem):
             sig = signals(stmt, records.get(path.stem))
-            (challenges / f"{stmt.id}.lean").write_text(stmt.challenge, encoding="utf-8")
-            neg = None
-            if stmt.challenge_neg:
-                neg = f"challenges/{stmt.id}_neg.lean"
-                (out / neg).write_text(stmt.challenge_neg, encoding="utf-8")
             entries.append(
                 {
                     "id": stmt.id,
@@ -41,8 +33,8 @@ def build(fc: Path, ep: Path, out: Path) -> dict:
                     "score": score(sig),
                     "compiles": None,
                     "error": None,
-                    "challenge": f"challenges/{stmt.id}.lean",
-                    "challenge_neg": neg,
+                    "challenge": stmt.challenge,
+                    "challenge_neg": stmt.challenge_neg,
                 }
             )
     entries.sort(key=lambda e: -e["score"])

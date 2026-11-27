@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import subprocess
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -30,13 +31,15 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=0)
     args = parser.parse_args()
     doc = load_catalogue(args.catalogue)
-    base = args.catalogue.parent
     todo = [e for e in doc["entries"] if e["compiles"] is None and e["signals"]["track"] != "formalized"]
     if args.limit:
         todo = todo[: args.limit]
 
     def run(entry: dict) -> None:
-        entry["compiles"], entry["error"] = compile_one(args.workspace.resolve(), (base / entry["challenge"]).resolve(), args.timeout)
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / "Challenge.lean"
+            file.write_text(entry["challenge"], encoding="utf-8")
+            entry["compiles"], entry["error"] = compile_one(args.workspace.resolve(), file, args.timeout)
         print(f"{'ok ' if entry['compiles'] else 'ERR'} {entry['id']}", flush=True)
 
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:

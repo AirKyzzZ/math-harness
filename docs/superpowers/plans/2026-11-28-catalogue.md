@@ -4,7 +4,7 @@
 
 **Goal:** a versioned Erdős catalogue built from formal-conjectures and erdosproblems, with frozen challenges, transparent ranking signals and `mh list`.
 
-**Architecture:** the pure-Python package `math_harness.catalogue` (extract, signals, store) is tested on fixture text. `scripts/build_catalogue.py` writes `src/math_harness/catalogue/data/catalogue.json` plus `challenges/<id>.lean`. `scripts/validate_catalogue.py` compiles the challenges in a Lean workspace and merges `compiles` back in.
+**Architecture:** the pure-Python package `math_harness.catalogue` (extract, signals, store) is tested on fixture text. `scripts/build_catalogue.py` writes `src/math_harness/catalogue/data/catalogue.json` with each challenge's text inline. `scripts/validate_catalogue.py` compiles the challenges in a Lean workspace and merges `compiles` back in.
 
 **Tech Stack:** Python 3.11+, PyYAML only in the build script (`uv run --with pyyaml`), Typer + Rich for `mh list`.
 
