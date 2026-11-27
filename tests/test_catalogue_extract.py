@@ -109,3 +109,9 @@ def test_name_glued_to_the_colon_is_parsed():
     src = "namespace E\n\n@[category research open, AMS 5]\ntheorem erdos_91.variants.six: 1 = 1 := by\n  sorry\n\nend E\n"
     (s,) = extract_statements(src, "91")
     assert s.id == "erdos_91.variants.six" and "theorem erdos_91.variants.six :\n    1 = 1 := by" in s.challenge
+
+
+def test_formal_proof_attribute_is_recorded():
+    src = '@[category research solved, AMS 11, formal_proof using lean4 at "https://x"]\ntheorem erdos_5.v : 1 = 1 := by\n  sorry\n'
+    (s,) = extract_statements(src, "5")
+    assert s.formal_proof

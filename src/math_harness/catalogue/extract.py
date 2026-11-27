@@ -20,6 +20,7 @@ class Statement:
     statement: str
     challenge: str
     challenge_neg: str | None
+    formal_proof: bool = False
 
 
 @dataclass
@@ -175,6 +176,15 @@ def extract_statements(source: str, problem: str) -> list[Statement]:
             neg = f" :\n    {negate_signature(binders, typ)}"
             challenge_neg = _assemble(chunks, chunk, _target_text(chunk, f"{chunk.name}_neg", neg))
         statements.append(
-            Statement(chunk.name, problem, category, question, f"{binders} : {typ}".strip(), challenge, challenge_neg)
+            Statement(
+                chunk.name,
+                problem,
+                category,
+                question,
+                f"{binders} : {typ}".strip(),
+                challenge,
+                challenge_neg,
+                any(a.startswith("formal_proof") for a in chunk.attrs),
+            )
         )
     return statements
