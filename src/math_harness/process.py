@@ -1,4 +1,5 @@
 import os
+import shutil
 import signal
 import subprocess
 import time
@@ -8,6 +9,15 @@ from pathlib import Path
 from typing import Protocol
 
 IS_WINDOWS = os.name == "nt"
+
+
+def resolve_executable(args: Sequence[str], env: Mapping[str, str] | None, windows: bool = IS_WINDOWS) -> list[str]:
+    command = list(args)
+    if not windows or env is None or not command:
+        return command
+    # CreateProcess searches the parent's PATH, not the env given to Popen
+    found = shutil.which(command[0], path=env.get("PATH", ""))
+    return [found, *command[1:]] if found else command
 
 POST_KILL_GRACE_S = 5
 
@@ -47,7 +57,7 @@ def run_command(
     start = time.monotonic()
     try:
         proc = subprocess.Popen(
-            list(args),
+            resolve_executable(args, env),
             cwd=cwd,
             env=dict(env) if env is not None else None,
             stdout=subprocess.PIPE,
