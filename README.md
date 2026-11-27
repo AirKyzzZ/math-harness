@@ -82,7 +82,7 @@ Each check runs in a fresh directory under `~/.mh/runs`, so nothing from a previ
 5. check that only `propext`, `Classical.choice` and `Quot.sound` are used,
 6. replay the proof in the Lean kernel.
 
-Each check rebuilds every module the files import, so its cost grows with the imports. A file that imports one narrow module takes minutes, and `import Mathlib` takes much longer. Faster checks through Lake's artifact cache are on the roadmap.
+Each check runs in a fresh directory, and Lake would rebuild every module the files import there. For `--origin own` checks without a sandbox, mh first fills a Lake artifact cache in `~/.mh/lake-cache` from the verification workspace, for the Mathlib modules the two files import, so the check restores them instead of compiling. A check then takes about 2 minutes. The cache grows with the modules you use, about 1.5 GB for a few thousand. Sandboxed checks do not use it yet.
 
 ## Sandbox caveat
 
