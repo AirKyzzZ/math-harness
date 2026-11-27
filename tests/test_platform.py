@@ -13,8 +13,13 @@ def test_detect_platform_linux_with_bwrap(monkeypatch):
     assert detect_platform(which=lambda name: "/usr/bin/bwrap") == PlatformInfo(os="linux", has_bwrap=True)
 
 
-def test_detect_platform_other(monkeypatch):
+def test_detect_platform_windows(monkeypatch):
     monkeypatch.setattr(sys, "platform", "win32")
+    assert detect_platform(which=lambda name: "C:/bwrap.exe") == PlatformInfo(os="windows", has_bwrap=False)
+
+
+def test_detect_platform_other(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "freebsd14")
     assert detect_platform(which=lambda _: None).os == "other"
 
 

@@ -1,3 +1,4 @@
+from pathlib import Path
 import os
 import subprocess
 import sys
@@ -83,3 +84,28 @@ def test_invalid_utf8_output_is_replaced_not_raised(tmp_path):
     result = run_command([sys.executable, "-c", code], tmp_path)
     assert "�" in result.stdout and result.stdout.startswith("ok")
     assert "�" in result.stderr
+
+
+def test_windows_kill_command_kills_the_whole_tree():
+    from math_harness.process import windows_kill_command
+
+    assert windows_kill_command(4242) == ["taskkill", "/T", "/F", "/PID", "4242"]
+
+
+def test_windows_resolves_the_executable_against_the_child_path(tmp_path):
+    from math_harness.process import resolve_executable
+
+    bin_dir = tmp_path / "elan" / "bin"
+    bin_dir.mkdir(parents=True)
+    for name in ("lake", "lake.exe"):
+        (bin_dir / name).write_bytes(b"MZ")
+        (bin_dir / name).chmod(0o755)
+    env = {"PATH": str(bin_dir), "PATHEXT": ".EXE"}
+    resolved = resolve_executable(["lake", "build"], env, windows=True)
+    assert resolved[1:] == ["build"] and Path(resolved[0]).parent == bin_dir
+
+
+def test_posix_leaves_the_command_alone(tmp_path):
+    from math_harness.process import resolve_executable
+
+    assert resolve_executable(["lake", "build"], {"PATH": str(tmp_path)}, windows=False) == ["lake", "build"]

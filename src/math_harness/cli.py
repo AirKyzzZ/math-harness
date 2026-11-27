@@ -68,7 +68,7 @@ def doctor(
     if fix and fixable:
         names = ", ".join(c.name for c in fixable)
         if typer.confirm(f"This will change your system to fix: {names}. Continue?"):
-            fix_results = apply_fixes(home, checks)
+            fix_results = apply_fixes(home, checks, platform=platform)
             checks = run_doctor(home, platform)
     _print_checks(checks + fix_results)
     required_ok = all(c.ok for c in checks if c.required) and all(c.ok for c in fix_results)
