@@ -13,6 +13,7 @@ from math_harness.lean.workspace import CURRENT_MARKER, TemplateSetupError, ensu
 from math_harness.platform import PlatformInfo
 from math_harness.process import CommandRunner, run_command
 
+EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 ELAN_INIT_URL = "https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh"
 ELAN_WINDOWS_ZIP_URL = "https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-pc-windows-msvc.zip"
 MIN_FREE_BYTES = 10 * 10**9
@@ -81,7 +82,7 @@ def run_doctor(
     free_bytes: Callable[[Path], int] = _free_bytes,
     elan_bin: Path | None = None,
 ) -> list[DoctorCheck]:
-    fallback = (elan_bin or elan_bin_dir()) / "elan"
+    fallback = (elan_bin or elan_bin_dir()) / f"elan{EXE_SUFFIX}"
     elan_path = which("elan") or (str(fallback) if fallback.is_file() and os.access(fallback, os.X_OK) else None)
     elan = (
         DoctorCheck("elan", True, True, elan_path, None)

@@ -350,3 +350,16 @@ def test_apply_fixes_on_windows_installs_elan_from_the_release_zip(tmp_path, mon
     assert downloads == ["https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-pc-windows-msvc.zip"]
     assert calls[0][0].endswith("elan-init.exe") and calls[0][1:] == ["-y", "--default-toolchain", "none"]
     assert all(r.ok for r in results)
+
+
+def test_elan_exe_in_elan_home_is_found_on_windows(tmp_path, monkeypatch):
+    monkeypatch.setattr(doctor, "EXE_SUFFIX", ".exe")
+    bin_dir = tmp_path / "elan" / "bin"
+    bin_dir.mkdir(parents=True)
+    exe = bin_dir / "elan.exe"
+    exe.write_bytes(b"MZ")
+    exe.chmod(0o755)
+    checks = run_doctor(
+        tmp_path, PlatformInfo("windows", False), which=lambda _: None, runner=ok_runner, free_bytes=lambda _: BIG, elan_bin=bin_dir
+    )
+    assert by_name(checks, "elan").ok
