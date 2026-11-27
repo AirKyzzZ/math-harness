@@ -10,6 +10,7 @@ from rich.table import Table
 from rich.text import Text
 
 from math_harness import __version__
+from math_harness.catalogue.store import CATALOGUE_FILE, CatalogueError, load_catalogue
 from math_harness.doctor import DoctorCheck, apply_fixes, run_doctor
 from math_harness.gates.lean_gate import GateCouldNotStart, LeanVerdict, SandboxUnavailable, run_lean_gate
 from math_harness.lean.workspace import TemplateSetupError, mh_home
@@ -134,3 +135,41 @@ def check(
             typer.echo(f"could not write receipt: {' '.join(sanitize(str(exc)).split())}", err=True)
             raise typer.Exit(2)
     raise typer.Exit(0 if verdict.accepted else 1)
+
+
+class Track(str, Enum):
+    open = "open"
+    formalize = "formalize"
+
+
+@app.command(name="list", help="Browse the Erdős catalogue, best-ranked first.")
+def list_problems(
+    track: Track | None = typer.Option(None, "--track", help="open problems or known results to formalize."),
+    compiles: bool = typer.Option(False, "--compiles", help="Only statements validated on the pinned toolchain."),
+    limit: int = typer.Option(20, "--limit", min=1, help="How many entries to show."),
+) -> None:
+    console = Console()
+    try:
+        doc = load_catalogue(CATALOGUE_FILE)
+    except CatalogueError as exc:
+        console.print(f"[red]could not load the catalogue:[/red] {sanitize(str(exc))}")
+        raise typer.Exit(2)
+    entries = [e for e in doc["entries"] if e["signals"]["track"] != "formalized"]
+    if track is not None:
+        entries = [e for e in entries if e["signals"]["track"] == track.value]
+    if compiles:
+        entries = [e for e in entries if e.get("compiles") is True]
+    entries.sort(key=lambda e: -e["score"])
+    table = Table("id", "track", "score", "posts", "status", "compiles")
+    for e in entries[:limit]:
+        sig = e["signals"]
+        ok = {True: "[green]yes[/green]", False: "[red]no[/red]"}.get(e.get("compiles"), "[dim]?[/dim]")
+        table.add_row(
+            Text(sanitize(e["id"])), sig["track"], f"{e['score']:.2f}", str(sig.get("forum_posts") or 0), str(sig.get("ep_status") or "-"), ok
+        )
+    console.print(table)
+    console.print(
+        f"[dim]{len(entries)} entries, formal-conjectures {str(doc.get('fc_revision', '?'))[:7]}. "
+        "The score is a sort key, not a chance of success.[/dim]"
+    )
+
