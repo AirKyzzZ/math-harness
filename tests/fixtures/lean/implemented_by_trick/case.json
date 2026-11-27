@@ -1,0 +1,8 @@
+{
+  "theorem_names": [
+    "t"
+  ],
+  "expect_accepted": false,
+  "expect_failed_step": "check_axioms",
+  "expect_detail": "native_decide"
+}
