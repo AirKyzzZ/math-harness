@@ -1,0 +1,23 @@
+import Mathlib
+
+open Filter Pointwise
+
+open scoped Topology
+
+namespace Erdos785
+
+noncomputable def counting (A : Set ℕ) (x : ℕ) : ℕ :=
+  (A ∩ Set.Icc 1 x).ncard
+
+noncomputable def aStar (A : Set ℕ) (x : ℕ) : ℕ :=
+  sSup (A ∩ Set.Icc 1 x)
+
+def IsExactAdditiveComplement (A B : Set ℕ) : Prop :=
+  IsAdditiveComplement A B ∧
+    Tendsto (fun x : ℕ => (counting A x * counting B x : ℝ) / (x : ℝ)) atTop (𝓝 1)
+
+theorem erdos_785.variants.chen_fang_sharp :
+    ∃ A B : Set ℕ, A.Infinite ∧ B.Infinite ∧ 0 ∉ A ∧ 0 ∉ B ∧ IsAdditiveComplement A B ∧ limsup (fun x : ℕ => ((counting A x * counting B x : ℝ) / (x : ℝ) : EReal)) atTop = ((3 / 2 : ℝ) : EReal) ∧ ∃ᶠ x : ℕ in atTop, (counting A x * counting B x : ℝ) - (x : ℝ) = 1 := by
+  sorry
+
+end Erdos785

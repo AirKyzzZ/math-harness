@@ -1,0 +1,50 @@
+import argparse
+import json
+import os
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from math_harness.catalogue.store import CATALOGUE_FILE, load_catalogue
+
+
+def compile_one(workspace: Path, file: Path, timeout: int) -> tuple[bool, str | None]:
+    try:
+        result = subprocess.run(
+            ["lake", "env", "lean", str(file)], cwd=workspace, capture_output=True, text=True, timeout=timeout, env=os.environ
+        )
+    except subprocess.TimeoutExpired:
+        return False, f"timeout after {timeout}s"
+    errors = [line for line in result.stdout.splitlines() if ": error" in line]
+    if result.returncode == 0 and not errors:
+        return True, None
+    return False, (errors[0] if errors else (result.stderr.strip() or f"exit {result.returncode}"))[:300]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workspace", type=Path, required=True)
+    parser.add_argument("--catalogue", type=Path, default=CATALOGUE_FILE)
+    parser.add_argument("--jobs", type=int, default=2)
+    parser.add_argument("--timeout", type=int, default=600)
+    parser.add_argument("--limit", type=int, default=0)
+    args = parser.parse_args()
+    doc = load_catalogue(args.catalogue)
+    base = args.catalogue.parent
+    todo = [e for e in doc["entries"] if e["compiles"] is None and e["signals"]["track"] != "formalized"]
+    if args.limit:
+        todo = todo[: args.limit]
+
+    def run(entry: dict) -> None:
+        entry["compiles"], entry["error"] = compile_one(args.workspace.resolve(), (base / entry["challenge"]).resolve(), args.timeout)
+        print(f"{'ok ' if entry['compiles'] else 'ERR'} {entry['id']}", flush=True)
+
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        for done, _ in enumerate(pool.map(run, todo), 1):
+            if done % 10 == 0:
+                args.catalogue.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    args.catalogue.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()
