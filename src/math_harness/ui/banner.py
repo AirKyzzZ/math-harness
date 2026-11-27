@@ -75,7 +75,11 @@ def _compact(version: str) -> list[Text]:
 
 
 def render_banner(console: Console, version: str) -> None:
-    layout = "minimal" if console.no_color or not console.is_terminal else layout_for(console.width)
+    layout = (
+        "minimal"
+        if console.no_color or not console.is_terminal or console.color_system is None
+        else layout_for(console.width)
+    )
     if layout == "minimal":
         console.print(Text(WORDMARK, style=Style(bold=True, color=ORANGE)))
         return

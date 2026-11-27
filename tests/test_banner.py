@@ -45,3 +45,11 @@ def test_no_color_gets_plain_wordmark():
 def test_non_tty_gets_plain_wordmark():
     out = _render(120, tty=False)
     assert "\x1b[" not in out and out.strip() == "math-harness"
+
+
+def test_terminal_without_colour_support_gets_plain_wordmark():
+    buf = io.StringIO()
+    console = Console(file=buf, width=120, force_terminal=True, color_system=None)
+    render_banner(console, "0.1.0")
+    out = buf.getvalue()
+    assert "math-harness" in out and not any(ch in out for ch in "▀▄█")
