@@ -56,7 +56,7 @@ def _print_checks(checks: list[DoctorCheck]) -> None:
     Console(width=120).print(table)
 
 
-@app.command()
+@app.command(help="Check that Lean and the verification workspace are ready.")
 def doctor(
     fix: bool = typer.Option(False, "--fix", help="Install missing elan and prepare the verification workspace."),
 ) -> None:
@@ -103,7 +103,7 @@ def _fail(message: str) -> None:
     raise typer.Exit(2)
 
 
-@app.command()
+@app.command(help="Verify a Lean solution against a frozen challenge.")
 def check(
     challenge: Path = typer.Option(..., exists=True, dir_okay=False, help="Challenge .lean file."),
     solution: Path = typer.Option(..., exists=True, dir_okay=False, help="Solution .lean file."),
