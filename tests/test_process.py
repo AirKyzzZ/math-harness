@@ -83,3 +83,9 @@ def test_invalid_utf8_output_is_replaced_not_raised(tmp_path):
     result = run_command([sys.executable, "-c", code], tmp_path)
     assert "�" in result.stdout and result.stdout.startswith("ok")
     assert "�" in result.stderr
+
+
+def test_windows_kill_command_kills_the_whole_tree():
+    from math_harness.process import windows_kill_command
+
+    assert windows_kill_command(4242) == ["taskkill", "/T", "/F", "/PID", "4242"]

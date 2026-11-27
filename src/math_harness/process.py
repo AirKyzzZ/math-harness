@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+IS_WINDOWS = os.name == "nt"
+
 POST_KILL_GRACE_S = 5
 
 
@@ -52,7 +54,8 @@ def run_command(
             stderr=subprocess.PIPE,
             encoding="utf-8",
             errors="replace",
-            start_new_session=True,
+            start_new_session=not IS_WINDOWS,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if IS_WINDOWS else 0,
         )
     except OSError as exc:
         return CommandResult(list(args), 127, "", f"{args[0]}: {exc}", time.monotonic() - start, False)
@@ -74,9 +77,17 @@ def run_command(
     return CommandResult(list(args), proc.returncode, stdout, stderr, time.monotonic() - start, False)
 
 
+def windows_kill_command(pid: int) -> list[str]:
+    return ["taskkill", "/T", "/F", "/PID", str(pid)]
+
+
 def _kill_group(proc: subprocess.Popen[str]) -> None:
-    try:
-        os.killpg(proc.pid, signal.SIGKILL)
-    except ProcessLookupError:
+    if IS_WINDOWS:
+        subprocess.run(windows_kill_command(proc.pid), capture_output=True, check=False)
         proc.kill()
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            proc.kill()
     proc.wait()

@@ -321,3 +321,32 @@ def test_fix_then_recheck_sees_elan_via_fallback_and_exits_0(monkeypatch, tmp_pa
     monkeypatch.setattr("math_harness.cli.apply_fixes", fake_apply)
     result = CliRunner().invoke(app, ["doctor", "--fix"], input="y\n")
     assert result.exit_code == 0, result.stdout
+
+
+def test_windows_sandbox_check_ok_with_own_only_detail(tmp_path):
+    checks = run_doctor(tmp_path, PlatformInfo("windows", False), which=all_present, runner=ok_runner, free_bytes=lambda _: BIG)
+    sandbox = by_name(checks, "sandbox")
+    assert sandbox.ok and not sandbox.required
+    assert sandbox.detail == "own-agent proofs only, unsandboxed"
+
+
+def test_apply_fixes_on_windows_installs_elan_from_the_release_zip(tmp_path, monkeypatch):
+    import zipfile
+
+    calls = []
+    downloads = []
+
+    def runner(args, cwd, timeout_s=None, env=None):
+        calls.append(list(args))
+        return CommandResult(list(args), 0, "", "", 0.0, False)
+
+    def download(url, dest):
+        downloads.append(url)
+        with zipfile.ZipFile(dest, "w") as archive:
+            archive.writestr("elan-init.exe", b"MZ")
+
+    monkeypatch.setattr(doctor, "ensure_template", lambda home, runner: home / "template")
+    results = apply_fixes(tmp_path, failing_checks(), runner=runner, download=download, platform=PlatformInfo("windows", False))
+    assert downloads == ["https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-pc-windows-msvc.zip"]
+    assert calls[0][0].endswith("elan-init.exe") and calls[0][1:] == ["-y", "--default-toolchain", "none"]
+    assert all(r.ok for r in results)

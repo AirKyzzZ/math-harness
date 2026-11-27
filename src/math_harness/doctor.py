@@ -3,6 +3,7 @@ import shutil
 import sys
 import tempfile
 import urllib.request
+import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,6 +14,7 @@ from math_harness.platform import PlatformInfo
 from math_harness.process import CommandRunner, run_command
 
 ELAN_INIT_URL = "https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh"
+ELAN_WINDOWS_ZIP_URL = "https://github.com/leanprover/elan/releases/latest/download/elan-x86_64-pc-windows-msvc.zip"
 MIN_FREE_BYTES = 10 * 10**9
 MIN_PYTHON = (3, 11)
 AGENT_VERSION_TIMEOUT_S = 10
@@ -62,7 +64,7 @@ def _check_agent_cli(name: str, which: Callable[[str], str | None], runner: Comm
 
 
 def _check_sandbox(platform: PlatformInfo) -> DoctorCheck:
-    if platform.os == "macos":
+    if platform.os in ("macos", "windows"):
         return DoctorCheck("sandbox", True, False, "own-agent proofs only, unsandboxed", None)
     if platform.os == "linux" and platform.has_bwrap:
         return DoctorCheck("sandbox", True, False, "bwrap found", None)
@@ -118,15 +120,23 @@ def run_doctor(
     ]
 
 
-def _install_elan(runner: CommandRunner, download: Callable[[str, Path], None]) -> DoctorCheck:
+def _install_elan(runner: CommandRunner, download: Callable[[str, Path], None], windows: bool = False) -> DoctorCheck:
     name = "install elan"
     with tempfile.TemporaryDirectory() as tmp:
-        script = Path(tmp) / "elan-init.sh"
         try:
-            download(ELAN_INIT_URL, script)
-        except OSError as exc:
+            if windows:
+                archive = Path(tmp) / "elan.zip"
+                download(ELAN_WINDOWS_ZIP_URL, archive)
+                with zipfile.ZipFile(archive) as zipped:
+                    zipped.extract("elan-init.exe", tmp)
+                command = [str(Path(tmp) / "elan-init.exe")]
+            else:
+                script = Path(tmp) / "elan-init.sh"
+                download(ELAN_INIT_URL, script)
+                command = ["sh", str(script)]
+        except (OSError, zipfile.BadZipFile, KeyError) as exc:
             return DoctorCheck(name, False, True, f"download failed: {exc}", None)
-        result = runner(["sh", str(script), "-y", "--default-toolchain", "none"], Path(tmp))
+        result = runner([*command, "-y", "--default-toolchain", "none"], Path(tmp))
     if result.returncode != 0:
         detail = result.stderr.strip() or result.stdout.strip()
         return DoctorCheck(name, False, True, f"exit {result.returncode}: {detail}", None)
@@ -138,12 +148,13 @@ def apply_fixes(
     checks: list[DoctorCheck],
     runner: CommandRunner = run_command,
     download: Callable[[str, Path], None] = _download,
+    platform: PlatformInfo | None = None,
 ) -> list[DoctorCheck]:
     failing = {c.name for c in checks if not c.ok}
     runner = with_elan_on_path(runner)
     results: list[DoctorCheck] = []
     if "elan" in failing:
-        install = _install_elan(runner, download)
+        install = _install_elan(runner, download, windows=platform is not None and platform.os == "windows")
         results.append(install)
         if not install.ok:
             return results
