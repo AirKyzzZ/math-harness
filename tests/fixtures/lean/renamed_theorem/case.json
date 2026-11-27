@@ -1,0 +1,8 @@
+{
+  "theorem_names": [
+    "t"
+  ],
+  "expect_accepted": false,
+  "expect_failed_step": "export_solution",
+  "expect_detail": "Constant t not found in environment"
+}

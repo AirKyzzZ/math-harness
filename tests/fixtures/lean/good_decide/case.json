@@ -1,0 +1,7 @@
+{
+  "theorem_names": [
+    "t"
+  ],
+  "expect_accepted": true,
+  "expect_failed_step": null
+}
