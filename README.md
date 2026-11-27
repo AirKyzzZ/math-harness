@@ -92,10 +92,10 @@ Untrusted proofs are run inside a bubblewrap sandbox, which is Linux-only. On ma
 
 1. Verification core: `doctor`, `check` and a basic `--receipt` (this release).
 2. Catalogue of problems to attempt.
-3. Agents and a solve loop driven by your own `claude` CLI, with an interactive `mh` prompt to launch and follow runs.
+3. Agents and a solve loop driven by your own `claude` and `codex` CLIs, with an interactive `mh` prompt to launch and follow runs.
 4. Trust outputs: fuller receipts and reports, and container-based sandboxing for untrusted input on macOS.
 
-Design notes are in `docs/superpowers/specs/2026-11-26-math-harness-design.md`. Regenerate the screenshots with `scripts/screenshots.sh` and the terminal logo with `scripts/gen_logo.py`.
+Design notes are in `docs/superpowers/specs/2026-11-26-math-harness-design.md`. Regenerate the screenshots with `scripts/screenshots.sh`, and the terminal logo with `uv run --with pillow python scripts/gen_logo.py` (needs `rsvg-convert` from librsvg).
 
 ## License
 
